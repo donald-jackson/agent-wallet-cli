@@ -19,7 +19,7 @@ export interface CipherParams {
 
 const DEFAULT_KDF_PARAMS: Omit<KdfParams, 'salt'> = {
   algorithm: 'argon2id',
-  time_cost: 3,
+  time_cost: 6,
   memory_cost: 65536, // 64 MB
   parallelism: 4,
 };

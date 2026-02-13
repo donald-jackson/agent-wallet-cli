@@ -67,10 +67,10 @@ describe('session', () => {
       expect(token).toBe('wlt_explicit');
     });
 
-    it('should read from session file', async () => {
-      const created = await createSession(walletDir, 'default', TEST_MNEMONIC);
-      const resolved = await resolveToken(walletDir, 'default');
-      expect(resolved).toBe(created);
+    it('should throw when no token available (no file fallback)', async () => {
+      // C6: token is no longer persisted to disk
+      await createSession(walletDir, 'default', TEST_MNEMONIC);
+      await expect(resolveToken(walletDir, 'default')).rejects.toThrow(WalletError);
     });
 
     it('should throw when no token available', async () => {

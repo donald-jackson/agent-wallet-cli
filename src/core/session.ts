@@ -13,6 +13,15 @@ const HKDF_INFO = 'agent-wallet-cli-session-key';
 const DEFAULT_DURATION = 3600; // 1 hour
 const MAX_DURATION = 86400; // 24 hours
 
+/** Recursively sort object keys for deterministic JSON serialization. */
+function canonicalJson(obj: unknown): string {
+  if (obj === null || typeof obj !== 'object') return JSON.stringify(obj);
+  if (Array.isArray(obj)) return '[' + obj.map(canonicalJson).join(',') + ']';
+  const sorted = Object.keys(obj as Record<string, unknown>).sort();
+  const entries = sorted.map(k => JSON.stringify(k) + ':' + canonicalJson((obj as Record<string, unknown>)[k]));
+  return '{' + entries.join(',') + '}';
+}
+
 export interface SessionFile {
   version: 1;
   wallet_name: string;
@@ -25,10 +34,6 @@ export interface SessionFile {
 
 function getSessionPath(walletDir: string, name: string): string {
   return join(getSessionDir(walletDir), `${name}.json`);
-}
-
-function getTokenFilePath(walletDir: string, name: string): string {
-  return join(getSessionDir(walletDir), `${name}.token`);
 }
 
 /** Encode a session token from token_id + token_secret. */
@@ -78,32 +83,33 @@ export async function createSession(
   const cipher = encryptAesGcm(mnemonicBuf, sessionKey);
   clearBuffer(mnemonicBuf);
 
-  // Compute HMAC for validation
-  const hmac = hmacSha256(tokenSecret, tokenId);
-
   const now = new Date();
   const expiresAt = new Date(now.getTime() + actualDuration * 1000);
 
-  const sessionFile: SessionFile & { hkdf_salt: string } = {
-    version: 1,
+  // Build session data without HMAC first
+  const sessionData = {
+    version: 1 as const,
     wallet_name: walletName,
     token_id: tokenId.toString('hex'),
-    hmac: hmac.toString('hex'),
     hkdf_salt: salt.toString('hex'),
     cipher,
     created_at: now.toISOString(),
     expires_at: expiresAt.toISOString(),
   };
 
+  // Compute HMAC over the full canonical session data (H4: covers all fields)
+  const hmac = hmacSha256(tokenSecret, Buffer.from(canonicalJson(sessionData)));
+
+  const sessionFile: SessionFile & { hkdf_salt: string } = {
+    ...sessionData,
+    hmac: hmac.toString('hex'),
+  };
+
   const sessionPath = getSessionPath(walletDir, walletName);
   await writeFile(sessionPath, JSON.stringify(sessionFile, null, 2));
   await setFilePermissions(sessionPath);
 
-  // Also write the token to a file for convenience
   const token = encodeToken(tokenId, tokenSecret);
-  const tokenPath = getTokenFilePath(walletDir, walletName);
-  await writeFile(tokenPath, token);
-  await setFilePermissions(tokenPath);
 
   // Clean up
   clearBuffer(sessionKey);
@@ -143,9 +149,10 @@ export async function validateSession(
       throw new WalletError(ErrorCodes.ERR_SESSION_INVALID, 'Invalid session token');
     }
 
-    // Validate HMAC
-    const expectedHmac = hmacSha256(tokenSecret, tokenId);
-    if (expectedHmac.toString('hex') !== sessionData.hmac) {
+    // Validate HMAC over full session data (H4: covers all fields, not just token_id)
+    const { hmac: storedHmac, ...dataWithoutHmac } = sessionData;
+    const expectedHmac = hmacSha256(tokenSecret, Buffer.from(canonicalJson(dataWithoutHmac)));
+    if (expectedHmac.toString('hex') !== storedHmac) {
       throw new WalletError(ErrorCodes.ERR_SESSION_INVALID, 'Invalid session token');
     }
     clearBuffer(expectedHmac);
@@ -166,22 +173,18 @@ export async function validateSession(
   }
 }
 
-/** Revoke a session (delete session and token files). */
+/** Revoke a session (delete session file). */
 export async function revokeSession(walletDir: string, walletName: string): Promise<void> {
   const sessionPath = getSessionPath(walletDir, walletName);
-  const tokenPath = getTokenFilePath(walletDir, walletName);
 
   if (await fileExists(sessionPath)) {
     await unlink(sessionPath);
-  }
-  if (await fileExists(tokenPath)) {
-    await unlink(tokenPath);
   }
 }
 
 /**
  * Resolve the session token from various sources.
- * Priority: explicit --token flag > AGENT_WALLET_CLI_TOKEN env > session file
+ * Priority: explicit --token flag > AGENT_WALLET_CLI_TOKEN env var
  */
 export async function resolveToken(walletDir: string, walletName: string, explicitToken?: string): Promise<string> {
   if (explicitToken) return explicitToken;
@@ -189,10 +192,5 @@ export async function resolveToken(walletDir: string, walletName: string, explic
   const envToken = process.env.AGENT_WALLET_CLI_TOKEN;
   if (envToken) return envToken;
 
-  const tokenPath = getTokenFilePath(walletDir, walletName);
-  if (await fileExists(tokenPath)) {
-    return (await readFile(tokenPath, 'utf-8')).trim();
-  }
-
-  throw new WalletError(ErrorCodes.ERR_NO_TOKEN, 'No session token provided. Use --token, AGENT_WALLET_CLI_TOKEN env, or run "agent-wallet-cli unlock" first.');
+  throw new WalletError(ErrorCodes.ERR_NO_TOKEN, 'No session token provided. Use --token or set AGENT_WALLET_CLI_TOKEN env var. Run "agent-wallet-cli unlock" to get a token.');
 }

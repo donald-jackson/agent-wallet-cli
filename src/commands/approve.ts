@@ -5,6 +5,7 @@ import { EthereumAdapter } from '../chains/ethereum.js';
 import { SolanaAdapter } from '../chains/solana.js';
 import { outputSuccess, outputError, type OutputFormat } from '../output/formatter.js';
 import { WalletError, ErrorCodes } from '../output/errors.js';
+import { confirmTransaction } from '../security/input.js';
 
 export function registerApproveCommand(program: Command): void {
   program
@@ -17,6 +18,7 @@ export function registerApproveCommand(program: Command): void {
     .option('--spender <address>', 'Spender/delegate address')
     .option('--amount <amount>', 'Amount to approve (or "unlimited")')
     .option('--account-index <index>', 'Account index', '0')
+    .option('--yes', 'Skip confirmation prompt')
     .option('--name <name>', 'Wallet name', 'default')
     .action(async (opts) => {
       const format: OutputFormat = program.opts().format ?? 'json';
@@ -50,6 +52,21 @@ export function registerApproveCommand(program: Command): void {
           adapter = new SolanaAdapter();
         } else {
           throw new WalletError(ErrorCodes.ERR_CHAIN_NOT_SUPPORTED, `Unsupported chain: ${opts.chain}`);
+        }
+
+        // Prompt for confirmation unless --yes
+        if (!opts.yes) {
+          const confirmed = await confirmTransaction({
+            Action: 'Approve spender',
+            Chain: opts.chain,
+            Network: opts.network,
+            Token: opts.tokenAddress,
+            Spender: opts.spender,
+            Amount: opts.amount,
+          });
+          if (!confirmed) {
+            throw new WalletError(ErrorCodes.ERR_INVALID_INPUT, 'Transaction cancelled by user');
+          }
         }
 
         const resolved = resolveTokenAddress(config, opts.chain, opts.network, opts.tokenAddress);
