@@ -1,6 +1,15 @@
 export interface TransferResult {
   txHash: string;
   explorerUrl?: string;
+  relayUsed?: boolean;
+  relayRequestId?: string;
+  relayFee?: string;
+  relayFeeSymbol?: string;
+  amountReceived?: string;
+}
+
+export interface TransferTokenOptions {
+  useRelay?: boolean;
 }
 
 export interface BalanceResult {
@@ -78,6 +87,7 @@ export interface ChainAdapter {
     amount: string,
     rpcUrl: string,
     dryRun?: boolean,
+    options?: TransferTokenOptions,
   ): Promise<TransferResult>;
 
   /** Approve spender for token. */

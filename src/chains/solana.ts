@@ -23,6 +23,7 @@ import { WalletError, ErrorCodes } from '../output/errors.js';
 import type {
   ChainAdapter,
   TransferResult,
+  TransferTokenOptions,
   BalanceResult,
   AllowanceResult,
   SignMessageResult,
@@ -122,6 +123,7 @@ export class SolanaAdapter implements ChainAdapter {
     amount: string,
     rpcUrl: string,
     dryRun = false,
+    _options?: TransferTokenOptions,
   ): Promise<TransferResult> {
     const connection = new Connection(rpcUrl);
     const keypair = deriveSolanaKeypair(mnemonic, accountIndex);

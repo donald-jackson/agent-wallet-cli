@@ -18,10 +18,16 @@ export interface WellKnownToken {
   symbol: string;
 }
 
+export interface RelayConfig {
+  enabled: boolean;
+  apiBaseUrl: string;
+}
+
 export interface AppConfig {
   walletDir: string;
   networks: Record<string, Record<string, NetworkConfig>>;
   tokens: Record<string, Record<string, Record<string, WellKnownToken>>>;
+  relay: RelayConfig;
 }
 
 export const DEFAULT_NETWORKS: Record<string, Record<string, NetworkConfig>> = {
@@ -96,6 +102,9 @@ export const WELL_KNOWN_TOKENS: Record<string, Record<string, Record<string, Wel
       usdc: { address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', decimals: 6, symbol: 'USDC' },
     },
     sepolia: {},
+    'base-sepolia': {
+      usdc: { address: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', decimals: 6, symbol: 'USDC' },
+    },
   },
   solana: {
     mainnet: {
@@ -124,12 +133,18 @@ export function getConfigFilePath(walletDir: string): string {
   return join(walletDir, 'config.json');
 }
 
+export const DEFAULT_RELAY_API_BASE_URL = 'https://7uz3zfgmc1.execute-api.us-east-1.amazonaws.com';
+
 export async function loadConfig(walletDir: string): Promise<AppConfig> {
   const configPath = getConfigFilePath(walletDir);
   const config: AppConfig = {
     walletDir,
     networks: JSON.parse(JSON.stringify(DEFAULT_NETWORKS)),
     tokens: JSON.parse(JSON.stringify(WELL_KNOWN_TOKENS)),
+    relay: {
+      enabled: true,
+      apiBaseUrl: DEFAULT_RELAY_API_BASE_URL,
+    },
   };
 
   // Apply env var overrides for RPC URLs
@@ -141,6 +156,16 @@ export async function loadConfig(walletDir: string): Promise<AppConfig> {
         netConfig.rpcUrl = envUrl;
       }
     }
+  }
+
+  // Apply relay env var overrides
+  const relayEnabled = process.env.AGENT_WALLET_CLI_RELAY_ENABLED;
+  if (relayEnabled !== undefined) {
+    config.relay.enabled = relayEnabled !== 'false' && relayEnabled !== '0';
+  }
+  const relayApiUrl = process.env.AGENT_WALLET_CLI_RELAY_API_URL;
+  if (relayApiUrl) {
+    config.relay.apiBaseUrl = relayApiUrl;
   }
 
   // Load saved config overrides
@@ -155,9 +180,25 @@ export async function loadConfig(walletDir: string): Promise<AppConfig> {
           }
         }
       }
+      if (saved.relay) {
+        if (typeof saved.relay.enabled === 'boolean') {
+          config.relay.enabled = saved.relay.enabled;
+        }
+        if (typeof saved.relay.apiBaseUrl === 'string') {
+          config.relay.apiBaseUrl = saved.relay.apiBaseUrl;
+        }
+      }
     } catch {
       // Ignore invalid config file
     }
+  }
+
+  // Env vars take precedence over config file
+  if (relayEnabled !== undefined) {
+    config.relay.enabled = relayEnabled !== 'false' && relayEnabled !== '0';
+  }
+  if (relayApiUrl) {
+    config.relay.apiBaseUrl = relayApiUrl;
   }
 
   return config;

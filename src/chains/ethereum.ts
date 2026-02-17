@@ -7,6 +7,7 @@ import {
   formatUnits,
   parseUnits,
   parseAbiItem,
+  encodeFunctionData,
   erc20Abi,
   type Address,
   type Hex,
@@ -19,6 +20,7 @@ import { mainnet, sepolia, polygon, arbitrum, base, baseSepolia, type Chain } fr
 import type {
   ChainAdapter,
   TransferResult,
+  TransferTokenOptions,
   BalanceResult,
   AllowanceResult,
   SignMessageResult,
@@ -27,6 +29,8 @@ import type {
 } from './types.js';
 import { clearUint8Array } from '../security/memory.js';
 import { WalletError, ErrorCodes } from '../output/errors.js';
+import { isRelaySupportedChain } from '../relay/client.js';
+import { attemptGaslessTransfer } from '../relay/index.js';
 
 const CHAIN_MAP: Record<number, Chain> = {
   1: mainnet,
@@ -154,6 +158,7 @@ export class EthereumAdapter implements ChainAdapter {
     amount: string,
     rpcUrl: string,
     dryRun = false,
+    options?: TransferTokenOptions,
   ): Promise<TransferResult> {
     const info = await getTokenInfo(rpcUrl, tokenAddress as Address, this.chainId);
     const parsedAmount = parseUnits(amount, info.decimals);
@@ -169,6 +174,59 @@ export class EthereumAdapter implements ChainAdapter {
         args: [to as Address, parsedAmount],
       });
       return { txHash: '0x0000000000000000000000000000000000000000000000000000000000000000 (dry-run)' };
+    }
+
+    // Check if relay fallback should be attempted
+    const useRelay = options?.useRelay !== false;
+    if (useRelay && this.chainId && isRelaySupportedChain(this.chainId)) {
+      const account = getAccount(mnemonic, accountIndex);
+      const client = makePublicClient(rpcUrl, this.chainId);
+
+      // Estimate gas cost for a standard transfer
+      let needsRelay = false;
+      try {
+        const [gasEstimate, gasPrice, nativeBalance] = await Promise.all([
+          client.estimateGas({
+            account: account.address,
+            to: tokenAddress as Address,
+            data: encodeFunctionData({
+              abi: erc20Abi,
+              functionName: 'transfer',
+              args: [to as Address, parsedAmount],
+            }),
+          }),
+          client.getGasPrice(),
+          client.getBalance({ address: account.address }),
+        ]);
+
+        const gasCost = gasEstimate * gasPrice;
+        needsRelay = nativeBalance < gasCost;
+      } catch {
+        // If gas estimation fails (e.g., zero native balance), try relay
+        const nativeBalance = await client.getBalance({ address: account.address });
+        needsRelay = nativeBalance === 0n;
+      }
+
+      if (needsRelay) {
+        const relayResult = await attemptGaslessTransfer({
+          mnemonic,
+          accountIndex,
+          tokenAddress,
+          to,
+          amount,
+          rpcUrl,
+          chainId: this.chainId,
+        });
+
+        return {
+          txHash: relayResult.txHash,
+          relayUsed: true,
+          relayRequestId: relayResult.requestId,
+          relayFee: relayResult.fee,
+          relayFeeSymbol: relayResult.feeSymbol,
+          amountReceived: relayResult.amountReceived,
+        };
+      }
     }
 
     const { client } = makeWalletClient(rpcUrl, mnemonic, accountIndex, this.chainId);

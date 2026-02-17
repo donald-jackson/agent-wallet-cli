@@ -19,6 +19,7 @@ export function registerSendCommand(program: Command): void {
     .option('--token-address <address>', 'Token contract address or alias (e.g. usdc)')
     .option('--account-index <index>', 'Account index', '0')
     .option('--dry-run', 'Simulate transaction without sending')
+    .option('--no-relay', 'Disable gasless relay fallback')
     .option('--yes', 'Skip confirmation prompt')
     .option('--name <name>', 'Wallet name', 'default')
     .action(async (opts) => {
@@ -70,6 +71,9 @@ export function registerSendCommand(program: Command): void {
           }
         }
 
+        // Determine if relay should be used (on by default, disabled with --no-relay or config)
+        const useRelay = opts.relay !== false && config.relay.enabled;
+
         let result;
         if (opts.tokenAddress) {
           const resolved = resolveTokenAddress(config, opts.chain, opts.network, opts.tokenAddress);
@@ -81,6 +85,7 @@ export function registerSendCommand(program: Command): void {
             opts.amount,
             netConfig.rpcUrl,
             opts.dryRun,
+            { useRelay },
           );
         } else {
           result = await adapter.transfer(
@@ -99,17 +104,23 @@ export function registerSendCommand(program: Command): void {
             : `${netConfig.explorerUrl}/tx/${result.txHash}`
           : undefined;
 
-        outputSuccess(
-          {
-            tx_hash: result.txHash,
-            chain: opts.chain,
-            network: opts.network,
-            dry_run: opts.dryRun ?? false,
-            explorer_url: explorerUrl,
-          },
-          format,
-          quiet,
-        );
+        const output: Record<string, unknown> = {
+          tx_hash: result.txHash,
+          chain: opts.chain,
+          network: opts.network,
+          dry_run: opts.dryRun ?? false,
+          explorer_url: explorerUrl,
+        };
+
+        if (result.relayUsed) {
+          output.relay_used = true;
+          output.relay_request_id = result.relayRequestId;
+          output.relay_fee = result.relayFee;
+          output.relay_fee_symbol = result.relayFeeSymbol;
+          output.amount_received = result.amountReceived;
+        }
+
+        outputSuccess(output, format, quiet);
       } catch (error) {
         outputError(error, format, quiet);
       }
