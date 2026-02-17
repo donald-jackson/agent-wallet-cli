@@ -20,6 +20,7 @@ A cross-platform TypeScript CLI wallet for Ethereum and Solana, designed for AI 
 - **Multi-chain**: Ethereum (+ Polygon, Arbitrum, Base) and Solana
 - **BIP-39 HD wallet**: 12 or 24-word mnemonic, multiple account indices
 - **ERC-20 & SPL tokens**: balance, transfer, approve, transferFrom, allowance
+- **Gasless relay**: Automatic fallback for ERC-20 transfers when wallet has no ETH for gas (EIP-2612 permit)
 - **Strong encryption**: Argon2id key derivation + AES-256-GCM
 - **Session tokens**: Time-limited unlock (default 1h, max 24h) so agents don't need your password
 - **Message signing**: Plain text, EIP-712 typed data, raw bytes
@@ -105,7 +106,7 @@ All commands accept these options:
 
 | Command | Description | Key Flags |
 |---------|-------------|-----------|
-| `send` | Transfer native coin or token | `--token`, `--chain` (required), `--to` (required), `--amount` (required), `--token-address`, `--dry-run` |
+| `send` | Transfer native coin or token | `--token`, `--chain` (required), `--to` (required), `--amount` (required), `--token-address`, `--dry-run`, `--no-relay` |
 | `approve` | Approve ERC-20/SPL spender | `--token`, `--chain` (required), `--token-address` (required), `--spender` (required), `--amount` (required) |
 | `allowance` | Query approval amount | `--chain` (required), `--token-address` (required), `--owner` (required), `--spender` (required) |
 | `transfer-from` | Delegated transfer | `--token`, `--chain` (required), `--token-address` (required), `--from` (required), `--to` (required), `--amount` (required) |
@@ -168,6 +169,10 @@ agent-wallet-cli send --token <token> --chain ethereum --token-address usdc --to
 \`\`\`
 
 Use `--dry-run` to simulate before sending.
+
+Token transfers automatically use a gasless relay when the wallet has no ETH for gas.
+The relay fee (e.g. 0.01 USDC) is deducted from the token amount. Check for `"relay_used": true` in the response.
+To disable: add `--no-relay` to the send command.
 
 ## Show Addresses
 
@@ -254,6 +259,70 @@ agent-wallet-cli balance --chain ethereum
 agent-wallet-cli send --chain ethereum --to 0x... --amount 0.01
 ```
 
+## Gasless Relay
+
+When an EVM wallet has no native tokens (ETH/MATIC/etc.) for gas, ERC-20 token transfers normally fail. The gasless relay solves this using [EIP-2612 permit](https://eips.ethereum.org/EIPS/eip-2612) signatures — the user signs a permit off-chain, a relayer submits the transaction on-chain, and the relay fee is deducted from the token amount itself (in USDC, not ETH).
+
+### How It Works
+
+1. The CLI detects that your wallet has insufficient native balance for gas
+2. It gets a fee quote from the relay API
+3. You sign an EIP-2612 permit (off-chain, no gas required)
+4. The relay submits the transaction on-chain and pays gas on your behalf
+5. The relay fee is deducted from your token transfer (e.g., 0.01 USDC)
+
+### Supported Chains
+
+| Chain | Chain ID |
+|-------|----------|
+| Ethereum | 1 |
+| Base | 8453 |
+| Sepolia | 11155111 |
+| Base Sepolia | 84532 |
+
+### Supported Tokens
+
+EIP-2612 compatible tokens — primarily USDC.
+
+### Example
+
+```bash
+# Wallet has 20 USDC but 0 ETH — relay kicks in automatically
+agent-wallet-cli send --token wlt_... --chain ethereum --network base-sepolia \
+  --token-address usdc --to 0x... --amount 2
+
+# Output includes relay metadata:
+# {
+#   "ok": true,
+#   "tx_hash": "0xead7d546...",
+#   "chain": "ethereum",
+#   "network": "base-sepolia",
+#   "dry_run": false,
+#   "explorer_url": "https://sepolia.basescan.org/tx/0xead7d546...",
+#   "relay_used": true,
+#   "relay_request_id": "req_ea1385df2c2e",
+#   "relay_fee": "0.01",
+#   "relay_fee_symbol": "USDC",
+#   "amount_received": "2"
+# }
+```
+
+### Disabling the Relay
+
+```bash
+# Per-command: use --no-relay flag
+agent-wallet-cli send --no-relay --token wlt_... --chain ethereum --to 0x... --amount 2 --token-address usdc
+
+# Via environment variable
+export AGENT_WALLET_CLI_RELAY_ENABLED=false
+
+# Via config.json
+# Add to ~/.agent-wallet-cli/config.json:
+# { "relay": { "enabled": false } }
+```
+
+If the wallet has sufficient native balance for gas, the standard transfer path is used regardless of relay settings.
+
 ## Supported Networks
 
 ### Ethereum
@@ -311,13 +380,13 @@ Use token names instead of contract addresses:
 
 ### Ethereum
 
-| Alias | Mainnet | Polygon | Arbitrum | Base |
-|-------|---------|---------|----------|------|
-| `usdc` | `0xA0b8...eB48` | `0x3c49...3359` | `0xaf88...5831` | `0x8335...2913` |
-| `usdt` | `0xdAC1...1ec7` | `0xc213...8e8F` | `0xFd08...cbb9` | — |
-| `dai` | `0x6B17...1d0F` | — | — | — |
-| `weth` | `0xC02a...6Cc2` | — | — | — |
-| `wbtc` | `0x2260...C599` | — | — | — |
+| Alias | Mainnet | Polygon | Arbitrum | Base | Base Sepolia |
+|-------|---------|---------|----------|------|--------------|
+| `usdc` | `0xA0b8...eB48` | `0x3c49...3359` | `0xaf88...5831` | `0x8335...2913` | `0x036C...cF7e` |
+| `usdt` | `0xdAC1...1ec7` | `0xc213...8e8F` | `0xFd08...cbb9` | — | — |
+| `dai` | `0x6B17...1d0F` | — | — | — | — |
+| `weth` | `0xC02a...6Cc2` | — | — | — | — |
+| `wbtc` | `0x2260...C599` | — | — | — | — |
 
 ### Solana
 
@@ -346,6 +415,8 @@ agent-wallet-cli networks
 | Variable | Description |
 |----------|-------------|
 | `AGENT_WALLET_CLI_TOKEN` | Session token (avoids `--token` flag on every command) |
+| `AGENT_WALLET_CLI_RELAY_ENABLED` | Enable/disable gasless relay (`true`/`false`, default `true`) |
+| `AGENT_WALLET_CLI_RELAY_API_URL` | Custom relay API endpoint |
 
 ## Development
 
@@ -371,11 +442,12 @@ src/
   index.ts          # CLI entry point (Commander.js)
   commands/         # Command implementations (one file per command)
   chains/           # Chain adapters (Ethereum via viem, Solana via @solana/web3.js)
+  relay/            # Gasless relay (API client, EIP-2612 permit signing, orchestrator)
   core/             # Keystore, session management, mnemonic derivation, config
   security/         # Encryption (Argon2id + AES-256-GCM), memory clearing, file permissions
   output/           # JSON/text formatters, error codes
 tests/
-  unit/             # Unit tests for encryption, keystore, mnemonic, memory, session, config
+  unit/             # Unit tests for encryption, keystore, mnemonic, memory, session, config, relay
   integration/      # End-to-end CLI flow tests
 ```
 
