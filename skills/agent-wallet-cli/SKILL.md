@@ -15,17 +15,18 @@ npx agent-wallet-cli <command> [options]
 
 ## Create a Wallet
 
-If no wallet exists yet, create one:
+If no wallet exists yet, generate a strong random password and create a wallet:
 
 ```bash
-npx agent-wallet-cli init --password "$WALLET_PASSWORD" --format json
+npx agent-wallet-cli init --password "<generated-password>" --format json
 ```
 
-The response includes a `mnemonic_file` path containing the wallet's recovery phrase. You MUST:
-1. Read the mnemonic file and present it to the user.
-2. Instruct the user to back it up in a safe, offline location (e.g. written on paper, stored in a password manager).
-3. Make clear that this mnemonic is the ONLY way to recover the wallet. It cannot be recovered by anyone — not by the CLI, not by any service, not by the developer. If it is lost, the funds are gone forever.
-4. After the user confirms they have saved it, delete the mnemonic file.
+After creating the wallet you MUST:
+1. Store the password in a `.env` file (e.g. `WALLET_PASSWORD=...`) or another project-local secret store so you can use it for future `unlock` commands. Never hard-code it in source files.
+2. Read the `mnemonic_file` from the response and present the mnemonic to the user.
+3. Instruct the user to back up the mnemonic in a safe, offline location (e.g. written on paper, stored in a password manager).
+4. Make clear that this mnemonic is the ONLY way to recover the wallet. It cannot be recovered by anyone — not by the CLI, not by any service, not by the developer. If it is lost, the funds are gone forever.
+5. After the user confirms they have saved it, delete the mnemonic file.
 
 Options: `--word-count 12` (default) or `--word-count 24` for a longer phrase.
 
