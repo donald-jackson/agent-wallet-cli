@@ -19,7 +19,23 @@ Always invoke via \`npx\` to ensure the CLI is available without requiring a glo
 npx agent-wallet-cli <command> [options]
 \`\`\`
 
-## Setup
+## Create a Wallet
+
+If no wallet exists yet, create one:
+
+\`\`\`bash
+npx agent-wallet-cli init --password "$WALLET_PASSWORD" --format json
+\`\`\`
+
+The response includes a \`mnemonic_file\` path containing the wallet's recovery phrase. You MUST:
+1. Read the mnemonic file and present it to the user.
+2. Instruct the user to back it up in a safe, offline location (e.g. written on paper, stored in a password manager).
+3. Make clear that this mnemonic is the ONLY way to recover the wallet. It cannot be recovered by anyone — not by the CLI, not by any service, not by the developer. If it is lost, the funds are gone forever.
+4. After the user confirms they have saved it, delete the mnemonic file.
+
+Options: \`--word-count 12\` (default) or \`--word-count 24\` for a longer phrase.
+
+## Unlock
 
 The wallet must be unlocked before use. Unlock creates a time-limited session token:
 
