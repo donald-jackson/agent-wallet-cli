@@ -1,6 +1,6 @@
 {
   "name": "agent-wallet-cli",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Cross-platform TypeScript CLI wallet for Ethereum and Solana",
   "type": "module",
   "bin": {
