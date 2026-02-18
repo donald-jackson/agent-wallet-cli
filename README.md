@@ -26,6 +26,7 @@ A cross-platform TypeScript CLI wallet for Ethereum and Solana, designed for AI 
 - **Message signing**: Plain text, EIP-712 typed data, raw bytes
 - **Transaction history**: Recent transactions with explorer links
 - **Approval discovery**: Scan recent ERC-20 Approval events
+- **x402 payments**: Automatic HTTP 402 stablecoin payments via EIP-3009 `TransferWithAuthorization` (no gas required)
 - **JSON-first output**: Machine-readable by default, human-readable `--format text` option
 - **Token aliases**: Use `usdc` instead of `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48`
 
@@ -111,6 +112,12 @@ All commands accept these options:
 | `allowance` | Query approval amount | `--chain` (required), `--token-address` (required), `--owner` (required), `--spender` (required) |
 | `transfer-from` | Delegated transfer | `--token`, `--chain` (required), `--token-address` (required), `--from` (required), `--to` (required), `--amount` (required) |
 | `approvals` | Discover ERC-20 approvals | `--token`, `--chain`, `--network`, `--limit` |
+
+### x402 Payments
+
+| Command | Description | Key Flags |
+|---------|-------------|-----------|
+| `x402` | HTTP request with automatic payment | `<url>`, `--token`, `--method`, `--header`, `--body`, `--dry-run`, `--yes`, `--max-amount` |
 
 ### History & Signing
 
@@ -341,6 +348,59 @@ export AGENT_WALLET_CLI_RELAY_ENABLED=false
 
 If the wallet has sufficient native balance for gas, the standard transfer path is used regardless of relay settings.
 
+## x402 Payments (HTTP 402)
+
+[x402](https://www.x402.org/) is an open HTTP payment protocol that uses the `402 Payment Required` status code for automatic stablecoin payments. When a server returns 402, the CLI signs a gasless EIP-3009 `TransferWithAuthorization`, retries the request with the payment signature, and the facilitator settles on-chain.
+
+### How It Works
+
+1. The CLI makes an HTTP request to the target URL
+2. If the server returns `402` with payment requirements, the CLI parses them
+3. It selects a compatible EVM payment option (scheme `exact`, supported chain)
+4. Signs an EIP-3009 `TransferWithAuthorization` (no gas required — facilitator pays gas)
+5. Retries the request with the `PAYMENT-SIGNATURE` header
+6. Returns the response along with settlement details (tx hash, network)
+
+### Example
+
+```bash
+# Preview payment requirements (no payment)
+agent-wallet-cli x402 https://x402stt.dtelecom.org/v1/session \
+  --token wlt_... --method POST \
+  --header "Content-Type:application/json" \
+  --body '{"minutes":5}' --dry-run
+
+# Make the payment
+agent-wallet-cli x402 https://x402stt.dtelecom.org/v1/session \
+  --token wlt_... --method POST \
+  --header "Content-Type:application/json" \
+  --body '{"minutes":5}' --yes --max-amount 0.05
+```
+
+### Options
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--method <method>` | HTTP method | `GET` |
+| `--header <header...>` | HTTP headers (`Key:Value`, repeatable) | |
+| `--body <body>` | Request body (`@filepath` to read from file) | |
+| `--dry-run` | Show payment requirements without paying | |
+| `--yes` | Skip payment confirmation prompt | |
+| `--max-amount <amount>` | Max payment in human-readable units (e.g. `0.10`) | |
+| `--account-index <n>` | Account index | `0` |
+
+### Supported Networks
+
+x402 payments work on any EVM chain configured in the wallet:
+
+| Chain | CAIP-2 ID | Asset |
+|-------|-----------|-------|
+| Ethereum | `eip155:1` | USDC |
+| Base | `eip155:8453` | USDC |
+| Base Sepolia | `eip155:84532` | USDC |
+| Polygon | `eip155:137` | USDC |
+| Arbitrum | `eip155:42161` | USDC |
+
 ## Supported Networks
 
 ### Ethereum
@@ -461,6 +521,7 @@ src/
   commands/         # Command implementations (one file per command)
   chains/           # Chain adapters (Ethereum via viem, Solana via @solana/web3.js)
   relay/            # Gasless relay (API client, EIP-2612 permit signing, orchestrator)
+  x402/             # x402 HTTP payment protocol (EIP-3009 signing, header parsing)
   core/             # Keystore, session management, mnemonic derivation, config
   security/         # Encryption (Argon2id + AES-256-GCM), memory clearing, file permissions
   output/           # JSON/text formatters, error codes

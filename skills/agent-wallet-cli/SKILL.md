@@ -1,6 +1,6 @@
 ---
 name: agent-wallet-cli
-description: Manage crypto wallets (Ethereum & Solana) — create wallets, check balances, send tokens, sign messages. Supports gasless ERC-20 transfers via relay.
+description: Manage crypto wallets (Ethereum & Solana) — create wallets, check balances, send tokens, sign messages. Supports gasless ERC-20 transfers via relay and x402 HTTP payments.
 ---
 
 # agent-wallet-cli
@@ -130,6 +130,48 @@ Delegated transfer (transferFrom):
 ```bash
 npx agent-wallet-cli transfer-from --token <token> --chain ethereum --token-address usdc --from <owner> --to <recipient> --amount <amount> --yes --format json
 ```
+
+## x402 Payments (HTTP 402)
+
+Make HTTP requests to x402-enabled endpoints with automatic stablecoin payment. When the server returns `402 Payment Required`, the wallet signs an EIP-3009 `TransferWithAuthorization` and retries the request with the payment header.
+
+Preview payment requirements (no payment):
+```bash
+npx agent-wallet-cli x402 https://example.com/api/paid-resource --token <token> --dry-run --format json
+```
+
+Make a paid request (auto-confirm):
+```bash
+npx agent-wallet-cli x402 https://example.com/api/paid-resource --token <token> --yes --format json
+```
+
+With a maximum payment cap:
+```bash
+npx agent-wallet-cli x402 https://example.com/api/paid-resource --token <token> --yes --max-amount 0.10 --format json
+```
+
+POST request with custom headers and body:
+```bash
+npx agent-wallet-cli x402 https://example.com/api/paid-resource --token <token> --method POST --header "Content-Type:application/json" --body '{"query":"data"}' --yes --format json
+```
+
+Read body from a file:
+```bash
+npx agent-wallet-cli x402 https://example.com/api/paid-resource --token <token> --method POST --body @request.json --yes --format json
+```
+
+Options:
+- `--method <method>` — HTTP method (default: GET)
+- `--header <header...>` — HTTP headers in `Key:Value` format (repeatable)
+- `--body <body>` — Request body (prefix with `@` to read from file)
+- `--account-index <index>` — Account index (default: 0)
+- `--dry-run` — Show payment requirements without paying
+- `--yes` — Skip payment confirmation (required for non-interactive agent use)
+- `--max-amount <amount>` — Maximum amount willing to pay in human-readable units (e.g. "0.10" for $0.10 USDC)
+
+Response includes `"paid": true` with payment details and settlement info when a payment was made, or `"paid": false` if the endpoint did not require payment.
+
+Always use `--dry-run` first to inspect payment requirements before committing to a payment. Use `--max-amount` as a safety cap to prevent overpaying.
 
 ## Lock
 
