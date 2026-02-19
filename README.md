@@ -20,7 +20,7 @@ A cross-platform TypeScript CLI wallet for Ethereum and Solana, designed for AI 
 - **Multi-chain**: Ethereum (+ Polygon, Arbitrum, Base) and Solana
 - **BIP-39 HD wallet**: 12 or 24-word mnemonic, multiple account indices
 - **ERC-20 & SPL tokens**: balance, transfer, approve, transferFrom, allowance
-- **Gasless relay**: Automatic fallback for ERC-20 transfers when wallet has no ETH for gas (EIP-2612 permit)
+- **Gasless relay**: Automatic fallback for ERC-20 transfers when wallet has no ETH for gas (EIP-3009 authorization)
 - **Strong encryption**: Argon2id key derivation + AES-256-GCM
 - **Session tokens**: Time-limited unlock (default 1h, max 24h) so agents don't need your password
 - **Message signing**: Plain text, EIP-712 typed data, raw bytes
@@ -286,13 +286,13 @@ agent-wallet-cli send --chain ethereum --to 0x... --amount 0.01
 
 ## Gasless Relay
 
-When an EVM wallet has no native tokens (ETH/MATIC/etc.) for gas, ERC-20 token transfers normally fail. The gasless relay solves this using [EIP-2612 permit](https://eips.ethereum.org/EIPS/eip-2612) signatures — the user signs a permit off-chain, a relayer submits the transaction on-chain, and the relay fee is deducted from the token amount itself (in USDC, not ETH).
+When an EVM wallet has no native tokens (ETH/MATIC/etc.) for gas, ERC-20 token transfers normally fail. The gasless relay solves this using [EIP-3009 authorization](https://eips.ethereum.org/EIPS/eip-3009) signatures — the user signs a `ReceiveWithAuthorization` off-chain, a relayer submits the transaction on-chain, and the relay fee is deducted from the token amount itself (in USDC, not ETH).
 
 ### How It Works
 
 1. The CLI detects that your wallet has insufficient native balance for gas
 2. It gets a fee quote from the relay API
-3. You sign an EIP-2612 permit (off-chain, no gas required)
+3. You sign an EIP-3009 authorization (off-chain, no gas required)
 4. The relay submits the transaction on-chain and pays gas on your behalf
 5. The relay fee is deducted from your token transfer (e.g., 0.01 USDC)
 
@@ -307,7 +307,7 @@ When an EVM wallet has no native tokens (ETH/MATIC/etc.) for gas, ERC-20 token t
 
 ### Supported Tokens
 
-EIP-2612 compatible tokens — primarily USDC.
+EIP-3009 compatible tokens — primarily USDC.
 
 ### Example
 
@@ -416,6 +416,8 @@ x402 payments work on any EVM chain configured in the wallet:
 
 ### Solana
 
+> **Warning:** Solana support is not heavily tested. Use at your own risk.
+
 | Network | RPC | Explorer |
 |---------|-----|----------|
 | mainnet | https://api.mainnet-beta.solana.com | https://explorer.solana.com |
@@ -520,7 +522,7 @@ src/
   index.ts          # CLI entry point (Commander.js)
   commands/         # Command implementations (one file per command)
   chains/           # Chain adapters (Ethereum via viem, Solana via @solana/web3.js)
-  relay/            # Gasless relay (API client, EIP-2612 permit signing, orchestrator)
+  relay/            # Gasless relay (API client, EIP-3009 authorization signing, orchestrator)
   x402/             # x402 HTTP payment protocol (EIP-3009 signing, header parsing)
   core/             # Keystore, session management, mnemonic derivation, config
   security/         # Encryption (Argon2id + AES-256-GCM), memory clearing, file permissions

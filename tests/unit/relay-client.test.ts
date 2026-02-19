@@ -4,17 +4,12 @@ import {
   getRelayQuote,
   submitRelay,
   pollRelayStatus,
-  RELAY_CONTRACT_ADDRESS,
   RELAY_API_BASE_URL,
   RELAY_SUPPORTED_CHAIN_IDS,
 } from '../../src/relay/client.js';
 
 describe('relay/client', () => {
   describe('constants', () => {
-    it('should export the relay contract address', () => {
-      expect(RELAY_CONTRACT_ADDRESS).toBe('0xc0F92D26bBeBC242F14c1d984dBB51270c674ECe');
-    });
-
     it('should export the relay API base URL', () => {
       expect(RELAY_API_BASE_URL).toBe('https://relay.ai.bvnk.io');
     });
@@ -72,6 +67,7 @@ describe('relay/client', () => {
         gasPriceGwei: '0.005',
         nativeTokenPriceUsd: '2500.00',
         expiresAt: '2026-02-17T12:05:00.000Z',
+        relayContract: '0xRelayContractAddress',
       };
 
       vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
@@ -136,7 +132,9 @@ describe('relay/client', () => {
         to: '0xTo',
         amount: '500000',
         fee: '10000',
-        deadline: 1700000000,
+        validAfter: 0,
+        validBefore: 1700001800,
+        nonce: '0xabc123',
         v: 27,
         r: '0xr',
         s: '0xs',
@@ -164,7 +162,9 @@ describe('relay/client', () => {
           to: '0xTo',
           amount: '1000',
           fee: '10',
-          deadline: 1700000000,
+          validAfter: 0,
+          validBefore: 1700001800,
+          nonce: '0xabc123',
           v: 27,
           r: '0xr',
           s: '0xs',

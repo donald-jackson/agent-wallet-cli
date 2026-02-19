@@ -13,9 +13,8 @@ import {
   getRelayQuote,
   submitRelay,
   pollRelayStatus,
-  RELAY_CONTRACT_ADDRESS,
 } from './client.js';
-import { signPermit } from './permit.js';
+import { signAuthorization } from './authorization.js';
 
 const ORCHESTRATOR_CHAIN_MAP: Record<number, Chain> = {
   1: mainnet,
@@ -92,14 +91,14 @@ export async function attemptGaslessTransfer(params: {
     );
   }
 
-  // 3. Sign EIP-2612 permit for totalRequired (amount + fee) to the relay contract
-  const permitSig = await signPermit({
+  // 3. Sign EIP-3009 ReceiveWithAuthorization for totalRequired (amount + fee) to the relay contract
+  const authSig = await signAuthorization({
     mnemonic,
     accountIndex,
     rpcUrl,
     chainId,
     tokenAddress,
-    spender: RELAY_CONTRACT_ADDRESS,
+    to: quote.relayContract,
     value: totalRequired,
   });
 
@@ -112,10 +111,12 @@ export async function attemptGaslessTransfer(params: {
       to,
       amount: parsedAmount.toString(),
       fee: quote.fee,
-      deadline: permitSig.deadline,
-      v: permitSig.v,
-      r: permitSig.r,
-      s: permitSig.s,
+      validAfter: authSig.validAfter,
+      validBefore: authSig.validBefore,
+      nonce: authSig.nonce,
+      v: authSig.v,
+      r: authSig.r,
+      s: authSig.s,
     },
     apiBaseUrl,
   );

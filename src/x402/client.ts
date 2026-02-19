@@ -115,7 +115,7 @@ export function selectPaymentOption(paymentRequired: PaymentRequired): PaymentRe
 
 /**
  * Sign an EIP-3009 TransferWithAuthorization.
- * Mirrors the pattern from permit.ts for EIP-712 typed data signing.
+ * Mirrors the pattern from authorization.ts for EIP-712 typed data signing.
  */
 export async function signTransferWithAuthorization(params: {
   mnemonic: string;

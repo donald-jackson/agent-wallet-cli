@@ -26,6 +26,7 @@ export function registerAddressCommand(program: Command): void {
           const { address } = deriveEthereumAddress(mnemonic, accountIndex);
           outputSuccess({ chain: 'ethereum', address, account_index: accountIndex }, format, quiet);
         } else if (opts.chain === 'solana') {
+          console.warn('\u26A0  Warning: Solana support is not heavily tested. Use at your own risk.');
           const { address } = deriveSolanaAddress(mnemonic, accountIndex);
           outputSuccess({ chain: 'solana', address, account_index: accountIndex }, format, quiet);
         } else {

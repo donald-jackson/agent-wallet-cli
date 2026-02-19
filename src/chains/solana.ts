@@ -33,6 +33,10 @@ import type {
 export class SolanaAdapter implements ChainAdapter {
   readonly chain = 'solana';
 
+  constructor() {
+    console.warn('\u26A0  Warning: Solana support is not heavily tested. Use at your own risk.');
+  }
+
   deriveAddress(mnemonic: string, accountIndex = 0): string {
     return deriveSolanaAddress(mnemonic, accountIndex).address;
   }

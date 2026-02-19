@@ -1,7 +1,6 @@
 import { WalletError, ErrorCodes } from '../output/errors.js';
 
 export const RELAY_API_BASE_URL = 'https://relay.ai.bvnk.io';
-export const RELAY_CONTRACT_ADDRESS = '0xc0F92D26bBeBC242F14c1d984dBB51270c674ECe';
 export const RELAY_SUPPORTED_CHAIN_IDS = [1, 8453, 11155111, 84532] as const;
 
 export interface RelayQuote {
@@ -13,6 +12,7 @@ export interface RelayQuote {
   gasPriceGwei: string;
   nativeTokenPriceUsd: string;
   expiresAt: string;
+  relayContract: string;
 }
 
 export interface RelaySubmitResult {
@@ -76,7 +76,9 @@ export async function submitRelay(
     to: string;
     amount: string;
     fee: string;
-    deadline: number;
+    validAfter: number;
+    validBefore: number;
+    nonce: string;
     v: number;
     r: string;
     s: string;
@@ -94,7 +96,9 @@ export async function submitRelay(
       to: params.to,
       amount: params.amount,
       fee: params.fee,
-      deadline: params.deadline,
+      validAfter: params.validAfter,
+      validBefore: params.validBefore,
+      nonce: params.nonce,
       v: params.v,
       r: params.r,
       s: params.s,
