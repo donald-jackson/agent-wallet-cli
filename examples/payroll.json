@@ -1,0 +1,27 @@
+[
+  {
+    "to": "0x742d35Cc6635C0532925a3b8D400d8DD2Dc4A4f7",
+    "amount": "250.00",
+    "reference": "payroll-2026-05-alice"
+  },
+  {
+    "to": "0x8Ba1f109551bD432803012645Ac136ddd64DBA72",
+    "amount": "175.50",
+    "reference": "payroll-2026-05-bob"
+  },
+  {
+    "to": "0x1CBd3b2770909D4e10f157cABC84C7264073C9Ec",
+    "amount": "300.00",
+    "reference": "payroll-2026-05-carol"
+  },
+  {
+    "to": "0xdF3e18d64BC6A983f673Ab319CCaE4f1a57C7097",
+    "amount": "125.75",
+    "reference": "payroll-2026-05-dave"
+  },
+  {
+    "to": "0xcd3B766CCDd6AE721141F452C550Ca635964ce71",
+    "amount": "450.00",
+    "reference": "payroll-2026-05-eve"
+  }
+]

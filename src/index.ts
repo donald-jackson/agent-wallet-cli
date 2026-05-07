@@ -17,6 +17,7 @@ import { registerApprovalsCommand } from './commands/approvals.js';
 import { registerExportCommand } from './commands/export.js';
 import { registerInstallSkillCommand } from './commands/install-skill.js';
 import { registerX402Command } from './commands/x402.js';
+import { registerBatchSendCommand } from './commands/batch-send.js';
 
 const program = new Command();
 
@@ -45,5 +46,6 @@ registerNetworksCommand(program);
 registerExportCommand(program);
 registerInstallSkillCommand(program);
 registerX402Command(program);
+registerBatchSendCommand(program);
 
 program.parse();
